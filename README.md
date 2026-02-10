@@ -16,3 +16,5 @@
 ### Стъпка 3: Свързване и Качване
 * `git remote add origin https://github.com/URL.git`
 * `git push -u origin main`
+
+Тест през сървър 2
