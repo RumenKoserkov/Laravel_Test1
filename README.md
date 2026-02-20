@@ -1,58 +1,147 @@
-### Стъпка 1: Подготовка в GitHub
-    1. Влез в профила си в GitHub.
-    2. Кликни на New repository.
-    3. Repository name: Напиши името (напр. Laravel_Test1).
-    4. Public/Private: Избери според нуждите си.
-    5. Не слагай отметка на "Add a README file", "Add .gitignore" или "Choose a license", тъй като Laravel проектът ти вече има свои такива файлове.
-    6. Кликни Create repository.
-    7. Копирай HTTPS линка.
+### 1) Създай user laravel (като root)
 
-### Стъпка 2: Подготовка за качване на проекта
-* `git init`
-* `git add .`
-* `git commit -m "Initial commit"`
-* `git branch -M main`
+### Създава Linux потребител "laravel" 
+* `adduser laravel`
 
-### Стъпка 3: Свързване и Качване
-* `git remote add origin https://github.com/URL.git`
-* `git push -u origin main`
+### Дава sudo права на потребителя.
+* `usermod -aG sudo laravel`
+-----------------------------------------------------------------------------
+###2) Инсталирай Docker + git (като root)
 
+### Обновява списъка с пакети.
+* `apt-get update`
 
-///////////////////////////////////////////////////////////////////
-### Настройки на нов сървър
-# 0) База данни
-* Правиш си база данни през adminer или където ти е кеф.
+### Инсталира нужните пакети за repo/key + git.
+* `apt-get install -y ca-certificates curl gnupg git unzip`
 
-# 1) Composer
-* `cd /tmp`
-* `php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');"`
-* `sudo php composer-setup.php --install-dir=/usr/local/bin --filename=composer`
-* `composer --version`
+### Създава директория за ключове на външни репота.
+* `install -m 0755 -d /etc/apt/keyrings`
 
-# 2) Потребител
-* `sudo adduser new_user`
-* `sudo usermod -aG sudo new_user`
+### Сваля и записва GPG ключа на Docker repo.
+* `curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg`
 
-# 3) Права над /var/www
-* `sudo chown -R new_user:new_user /var/www`
+### Дава права key файлът да се чете от apt.
+* `chmod a+r /etc/apt/keyrings/docker.gpg`
 
-# 4) SSH за VS Code (АКО СЕ НАЛОЖИ!!!!!!!!!!!!!)
-* `sudo vim /etc/ssh/sshd_config`
-* `PasswordAuthentication yes`
-* `sudo systemctl restart ssh`
+### Добавя официалното Docker repo към apt.
+* `echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo ${VERSION_CODENAME}) stable" \
+| tee /etc/apt/sources.list.d/docker.list > /dev/null`
 
-# 5) Клониране + composer install
-* `cd /var/www`
-* `git clone https://github.com/RumenKoserkov/Laravel_Test1.git test1`
-* `cd test1`
-* `composer install`
+### Обновява пакети след добавяне на docker repo.
+* `apt-get update`
 
-# 6) Laravel конфигурация + права
+### Инсталира Docker Engine + compose plugin (compose v2).
+* `apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin`
+
+### Docker права за laravel (като root)
+### Добавя laravel към docker групата (docker без sudo).
+* `usermod -aG docker laravel`
+
+-----------------------------------------------------------------------------
+### 3) Влез като laravel
+
+### Превключваш към потребителя laravel.
+* `su - laravel`
+
+### Проверка: Docker е наличен.
+* `docker --version`
+
+### Проверка: docker compose plugin работи.
+* `docker compose version`
+-----------------------------------------------------------------------------
+4) Clone проекта
+
+### Създава папка за проекти.
+* `mkdir -p ~/apps`
+
+### Влизаш в папката.
+* `cd ~/apps`
+
+### Клонира репото.
+* `git clone http://192.168.1.201/Rumen/laravel_test1.git`
+
+### Влизаш в проекта.
+* `cd Laravel_Test1`
+
+-----------------------------------------------------------------------------
+### 5) .env (копирай и настрой)
+
+### Създава .env от шаблона.
 * `cp .env.example .env`
-* `php artisan key:generate`
-* `vim .env` (Попълни DB данните тук!)
-* `sudo chown -R new_user:www-data storage bootstrap/cache`
-* `sudo chmod -R 775 storage bootstrap/cache`
-* `php artisan migrate`
 
-проба 18.02
+### Редактираш .env.
+* `vim .env`
+
+
+Минимум задължителни стойности:
+
+### URL за достъп (локално на сървъра).
+* `APP_URL=http://localhost:8081`
+
+###DB_HOST=mysql е service name от compose, не localhost.
+* `DB_CONNECTION=mysql`
+* `DB_HOST=mysql`
+* `DB_PORT=3306`
+* `DB_DATABASE=laravel`
+* `DB_USERNAME=sail`
+* `DB_PASSWORD=password`
+
+### Redis контейнера по service name.
+* `REDIS_HOST=redis`
+
+### Портове + уникално име на проекта, за да няма конфликти.
+* `APP_PORT=8081`
+* `FORWARD_DB_PORT=3308`
+* `VITE_PORT=5174`
+* `COMPOSE_PROJECT_NAME=laravel_test1`
+
+### Задава UID/GID за Sail runtime build-а.
+* `WWWUSER=1000`
+* `WWWGROUP=1000`
+
+-----------------------------------------------------------------------------
+### 6) Composer install (за да имаш vendor/ и sail)
+
+### Инсталира PHP dependencies в vendor/ чрез временен composer контейнер.
+### След това вече имаш ./vendor/bin/sail
+* `docker run --rm \
+  -u "$(id -u):$(id -g)" \
+  -v "$(pwd):/app" \
+  -w /app \
+  composer:2 \
+  composer install --no-interaction --prefer-dist`
+
+-----------------------------------------------------------------------------
+### 7) Fix на compose.yaml (ако го има този ред)
+
+### Маха реда "image: sail-8.5/app" ако присъства (за да не override-ва build).
+* `vim compose.yaml`
+-----------------------------------------------------------------------------
+### 8) Стартирай контейнерите със Sail
+
+### Стартира и билдва контейнерите през Sail (реално docker compose wrapper).
+* `./vendor/bin/sail up -d --build`
+
+
+### Показва контейнерите на проекта (по-чисто от docker ps).
+* `./vendor/bin/sail ps`
+
+
+-----------------------------------------------------------------------------
+### 9) Laravel setup (само веднъж)
+
+### Генерира APP_KEY и го записва в .env (без него дава 500).
+* `./vendor/bin/sail artisan key:generate`
+
+### Пуска миграциите в MySQL контейнера.
+* `./vendor/bin/sail artisan migrate --force`
+
+### Прави symlink за uploads; || true ако вече съществува да не гърми.
+* `./vendor/bin/sail artisan storage:link || true`
+
+--------------------------------------------------------------------------------
+### ▶️ Стартиране
+* `./vendor/bin/sail up -d`
+
+### 🛑 Спиране
+* `./vendor/bin/sail down`
